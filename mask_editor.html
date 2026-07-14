@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Mask editor</title>
+<link rel="stylesheet" href="/static/style.css"></head><body>
+<div id="splash">
+ <div class="splash-inner">
+   <h1 class="splash-title">Lung Cancer Masks Editor</h1>
+   <p class="splash-sub">Paint and refine lung &amp; nodule masks</p>
+   <button id="startBtn" class="splash-start">Start →</button>
+   <div class="splash-hint">or press Enter</div>
+ </div>
+</div>
+<div id="credit">made by: Francisco Sá Couto</div>
+<div id="side">
+ <h1 id="title">Mask editor</h1>
+ <div class="card">
+   <div class="lbl">Series <span id="pill"></span></div>
+   <select id="pid"></select>
+   <div class="row" style="margin-top:10px"><button class="sec" id="prev">‹ Prev</button><button class="sec" id="next">Next ›</button></div>
+   <button class="sec" id="nextUn" style="margin-top:8px">Next unedited</button>
+   <div id="progbar"><div id="progfill"></div></div>
+   <div id="prog"></div>
+ </div>
+ <div class="card">
+   <div class="lbl">Edit layer</div>
+   <div class="seg"><button id="lyLung">🔴 Lung</button><button class="sec" id="lyNod">🟢 Nodule</button></div>
+   <div class="lbl">Tool</div>
+   <div class="seg"><button id="paint">Paint</button><button class="sec" id="erase">Erase</button></div>
+ </div>
+ <div class="card">
+   <div class="lbl">Brush size · <span id="bs">14</span> px</div>
+   <input type="range" id="brush" min="1" max="60" value="14">
+   <div class="lbl">Mask opacity</div>
+   <input type="range" id="op" min="0" max="100" value="45">
+   <div class="lbl">Zoom · <span id="zl">2.0</span>×</div>
+   <input type="range" id="zoom" min="10" max="60" value="20">
+ </div>
+ <div class="card">
+   <div class="row"><button class="sec" id="undo">Undo</button><button class="sec" id="redo">Redo</button></div>
+   <div class="row" style="margin-top:8px"><button class="sec" id="fill">Fill holes</button><button class="sec" id="islands">Keep 2</button></div>
+   <label class="switch" id="sw0" style="margin-top:14px"><span id="sw0t">Show lung</span><input type="checkbox" id="lungvis" checked></label>
+   <label class="switch" id="sw1" style="margin-top:10px"><span id="sw1t">Show nodule</span><input type="checkbox" id="nod" checked></label>
+   <div class="legend"><span id="leg0"><span class="dot" id="dot0"></span><span id="leg0t"></span></span><span id="leg1"><span class="dot" id="dot1"></span><span id="leg1t"></span></span></div>
+ </div>
+ <button class="save-btn" id="save">Save edits</button>
+ <button class="sec" id="reset" style="margin-top:8px">Reset to original</button>
+ <div id="status"></div>
+ <div class="help">
+   <kbd>1</kbd>/<kbd>2</kbd> layer · <kbd>P</kbd>/<kbd>E</kbd> paint/erase · <kbd>[</kbd><kbd>]</kbd> brush ·
+   <kbd>←</kbd><kbd>→</kbd> series · <kbd>U</kbd> next unedited · <kbd>H</kbd> hold to peek CT ·
+   <kbd>Ctrl+Z</kbd> undo · <kbd>Ctrl+S</kbd> save · right-drag erases
+ </div>
+</div>
+<div id="main"><div id="stage">
+ <canvas id="bg"></canvas><canvas id="mk"></canvas><canvas id="ov"></canvas>
+</div></div>
+<div id="cursor"></div>
+<script src="/static/app.js"></script></body></html>
