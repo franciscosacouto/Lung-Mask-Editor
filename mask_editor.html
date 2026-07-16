@@ -4,6 +4,56 @@
  <div class="splash-inner">
    <h1 class="splash-title">Lung Cancer Masks Editor</h1>
    <p class="splash-sub">Paint and refine lung &amp; nodule masks</p>
+   <div class="splash-form">
+     <div id="genericSection">
+       <label class="splash-field">
+         <span>Images folder</span>
+         <div class="splash-row"><input type="text" id="cfgImages" placeholder="folder of &lt;id&gt;.npy images"><button class="sec" id="browseImages">Browse…</button></div>
+       </label>
+
+       <label class="switch splash-toggle"><span>Lung masks</span><input type="checkbox" id="tglLung"></label>
+       <div class="splash-subfields" id="lungFields">
+         <label class="splash-field">
+           <span>Lung mask folder</span>
+           <div class="splash-row"><input type="text" id="cfgMasks" placeholder="folder of &lt;id&gt;.npy masks"><button class="sec" id="browseMasks">Browse…</button></div>
+         </label>
+       </div>
+
+       <label class="switch splash-toggle"><span>Lung nodule masks</span><input type="checkbox" id="tglNodule"></label>
+       <div class="splash-subfields" id="noduleFields">
+         <label class="splash-field">
+           <span>Mode</span>
+           <select id="noduleMode"><option value="folder">Folder of masks</option><option value="csv">Centroid CSV</option></select>
+         </label>
+         <label class="splash-field" id="noduleFolderField">
+           <span>Nodule mask folder</span>
+           <div class="splash-row"><input type="text" id="cfgMasks2" placeholder="folder of &lt;id&gt;.npy masks"><button class="sec" id="browseMasks2">Browse…</button></div>
+         </label>
+         <label class="splash-field" id="noduleCsvField">
+           <span>Nodule centroid CSV <em>(id + x + y per nodule, 32×32px seed)</em></span>
+           <div class="splash-row"><input type="text" id="cfgNoduleCsv" placeholder="csv with id + x + y"><button class="sec" id="browseNoduleCsv">Browse…</button></div>
+         </label>
+         <label class="splash-field" id="noduleColsField">
+           <span>Columns override <em>(optional, e.g. "image,x,y" — blank = auto-detect)</em></span>
+           <div class="splash-row"><input type="text" id="cfgNoduleCols" placeholder="id,x,y"></div>
+         </label>
+       </div>
+     </div>
+
+     <div class="splash-divider">— or —</div>
+     <label class="switch splash-toggle"><span>protocol_7 / LUNA25 dataset</span><input type="checkbox" id="tglLuna"></label>
+     <div class="splash-subfields" id="lunaFields">
+       <label class="splash-field">
+         <span>Dataset folder <em>(protocol_7 root, or a flat P*-S*.npy folder)</em></span>
+         <div class="splash-row"><input type="text" id="cfgDataset" placeholder="e.g. protocol_7"><button class="sec" id="browseDataset">Browse…</button></div>
+       </label>
+       <label class="splash-field">
+         <span>Series CSV <em>(optional — blank = every series in the dataset)</em></span>
+         <div class="splash-row"><input type="text" id="cfgSeries" placeholder="patient,last5 CSV"><button class="sec" id="browseSeries">Browse…</button></div>
+       </label>
+     </div>
+   </div>
+   <div id="splashErr" class="splash-err"></div>
    <button id="startBtn" class="splash-start">Start →</button>
    <div class="splash-hint">or press Enter</div>
  </div>
@@ -23,7 +73,7 @@
    <div class="lbl">Edit layer</div>
    <div class="seg"><button id="lyLung">🔴 Lung</button><button class="sec" id="lyNod">🟢 Nodule</button></div>
    <div class="lbl">Tool</div>
-   <div class="seg"><button id="paint">Paint</button><button class="sec" id="erase">Erase</button></div>
+   <div class="seg"><button id="paint">Paint</button><button class="sec" id="erase">Erase</button><button class="sec" id="sam">✨ SAM</button></div>
  </div>
  <div class="card">
    <div class="lbl">Brush size · <span id="bs">14</span> px</div>
@@ -36,6 +86,7 @@
  <div class="card">
    <div class="row"><button class="sec" id="undo">Undo</button><button class="sec" id="redo">Redo</button></div>
    <div class="row" style="margin-top:8px"><button class="sec" id="fill">Fill holes</button><button class="sec" id="islands">Keep 2</button></div>
+   <button class="sec" id="autoseg" style="margin-top:8px">✨ Refine from its box</button>
    <label class="switch" id="sw0" style="margin-top:14px"><span id="sw0t">Show lung</span><input type="checkbox" id="lungvis" checked></label>
    <label class="switch" id="sw1" style="margin-top:10px"><span id="sw1t">Show nodule</span><input type="checkbox" id="nod" checked></label>
    <div class="legend"><span id="leg0"><span class="dot" id="dot0"></span><span id="leg0t"></span></span><span id="leg1"><span class="dot" id="dot1"></span><span id="leg1t"></span></span></div>
@@ -53,4 +104,5 @@
  <canvas id="bg"></canvas><canvas id="mk"></canvas><canvas id="ov"></canvas>
 </div></div>
 <div id="cursor"></div>
+<div id="sambox"></div>
 <script src="/static/app.js"></script></body></html>

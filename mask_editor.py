@@ -19,56 +19,14 @@ per layer plus an image×mask composite:
 Code layout: sources.py (data), server.py (Flask routes), this file (CLI/wiring).
 """
 import argparse
-import csv
-import io
-import re
 from pathlib import Path
 
+import segment
 from server import CFG, app
-from sources import GenericSource, StagingSource, make_demo
+from sources import build_empty_cfg, build_generic_cfg, build_luna_cfg, make_demo
 
 # LUNA preset default: look next to this script (put your images folder beside tools/).
 DEFAULT_DATASET = str(Path(__file__).resolve().parent)
-
-
-def parse_series(spec):
-    """Return series stems 'P<patient>-S<last5>' from --series.
-
-    --series is a file or an inline string. A file may be a CSV with 'patient' and
-    'last5' columns, or one entry per line. An entry is either a stem (P100012-S22196)
-    or a 'patient,last5' pair (also accepts space/dash). Inline, separate pairs with ';'
-    (e.g. "100012,22196; 100570,45005") or pass stems comma-separated.
-    """
-    p = Path(spec)
-    if p.exists():
-        text = p.read_text()
-        head = text.splitlines()[0].lower() if text.strip() else ""
-        if "patient" in head and "last5" in head:  # CSV with named columns
-            return [f"P{r['patient'].strip()}-S{r['last5'].strip()}"
-                    for r in csv.DictReader(io.StringIO(text)) if r.get("patient") and r.get("last5")]
-        chunks = text.splitlines()
-    else:
-        chunks = re.split(r"[;\n]+", spec)  # inline: pairs separated by ';' or newline
-
-    entries = []
-    for ch in chunks:
-        ch = ch.strip()
-        if not ch or ch.startswith("#"):
-            continue
-        if "," in ch and ch.upper().startswith("P"):  # a comma list of stems
-            entries += [c.strip() for c in ch.split(",") if c.strip()]
-        else:
-            entries.append(ch)
-
-    out = []
-    for e in entries:
-        if re.match(r"P\d+-S\w+$", e):
-            out.append(e)
-            continue
-        parts = re.split(r"[,\s\-]+", e)
-        if len(parts) >= 2 and parts[0].isdigit():
-            out.append(f"P{parts[0]}-S{parts[1]}")
-    return out
 
 
 def parse_ids(spec):
@@ -80,10 +38,6 @@ def parse_ids(spec):
     return [x.strip() for x in spec.replace("\n", ",").split(",") if x.strip()]
 
 
-def _slug(s):
-    return re.sub(r"[^A-Za-z0-9_.-]+", "_", s).strip("_") or "layer"
-
-
 def build_cli():
     ap = argparse.ArgumentParser(
         description="Local browser mask editor — paint masks on 2D .npy images.")
@@ -93,12 +47,17 @@ def build_cli():
     ap.add_argument("--masks2", help="folder of <id>.npy masks for layer 2 (optional)")
     ap.add_argument("--names", default="mask,label2", help="layer display names, comma-separated")
     ap.add_argument("--ids", help="restrict to these ids: comma list or a file (one id/line)")
+    ap.add_argument("--nodule-csv", help="alternative to --masks2: a CSV of nodule centroids "
+                    "(id + x + y columns, sniffed by name or overridden with --nodule-cols) "
+                    "seeding a 32x32px square per centroid, refine by hand afterward")
+    ap.add_argument("--nodule-cols", help="override the sniffed column names as 'id,x,y'")
     ap.add_argument("--demo", action="store_true", help="generate synthetic data and edit that")
     # ---- LUNA25 preset ----
-    ap.add_argument("--dataset", default=DEFAULT_DATASET,
+    ap.add_argument("--dataset", default=None,
                     help="LUNA preset: path to the images folder — either a protocol_7 root "
-                    "(with images/chest) or a flat folder of P*-S*.npy. Default: next to this "
-                    "script. Without --series, every image found is edited.")
+                    "(with images/chest) or a flat folder of P*-S*.npy. Passing this (or "
+                    "--series) switches to LUNA mode; default (next to this script) is used "
+                    "if only --series is given. Without --series, every image found is edited.")
     ap.add_argument("--series", help="LUNA preset (optional): restrict to these series "
                     "(patient,last5 / stems / CSV); default is all images in the folder")
     # ---- common ----
@@ -106,59 +65,62 @@ def build_cli():
     ap.add_argument("--skip-done", action="store_true", help="skip ids already saved in --out-dir (resume)")
     ap.add_argument("--no-masked", action="store_true", help="do not write the image×mask composite")
     ap.add_argument("--port", type=int, default=8000)
+    # ---- optional LiteMedSAM box/click segmentation ----
+    ap.add_argument("--sam-checkpoint", help="lite_medsam.pth (default: models/lite_medsam.pth)")
+    ap.add_argument("--litemedsam-repo", help="clone of the MedSAM LiteMedSAM branch "
+                    "(default: a MedSAM/ folder next to the script)")
+    # ---- optional MobileSAM point/box segmentation (lung layer) ----
+    ap.add_argument("--mobilesam-checkpoint", help="mobile_sam.pt (default: models/mobile_sam.pt)")
+    ap.add_argument("--mobilesam-repo", help="clone of MobileSAM "
+                    "(default: a MobileSAM/ folder next to the script)")
     return ap
-
-
-RED, GREEN = [255, 85, 85], [0, 230, 90]
 
 
 def configure(args):
     """Build the data source + output layout into CFG. Returns (source, label)."""
     out = Path(args.out_dir or "mask_edits")
+    CFG["_out_base"] = str(out)  # remembered so /api/configure can reuse it later
 
     if args.demo:
         demo = make_demo(Path(args.out_dir or ".") / "demo_data")
         args.images, args.masks, args.masks2 = str(demo / "images"), str(demo / "masks"), None
         print(f"demo data written to {demo}")
 
+    if not args.images and args.dataset is None and not args.series:
+        # -------- nothing requested: start empty in generic mode --------
+        # (LUNA mode only kicks in if the user explicitly asked for it via --dataset/--series;
+        # bare `mask_editor.py` should land on the splash screen's generic fields, not LUNA.)
+        CFG.update(build_empty_cfg(out))
+        return CFG["source"], "generic (unconfigured)"
+
     if args.images:  # -------- generic mode --------
-        names = [n.strip() for n in args.names.split(",") if n.strip()] or ["mask"]
-        two = bool(args.masks2) or len(names) >= 2
-        names = (names + ["label2"])[:2] if two else names[:1]
-        layers = [{"name": names[0], "color": RED}] + ([{"name": names[1], "color": GREEN}] if two else [])
-        source = GenericSource(args.images, [args.masks, args.masks2][:len(layers)],
-                               parse_ids(args.ids) if args.ids else None)
-        if not source.images_dir.is_dir():
-            raise SystemExit(f"images dir not found: {source.images_dir}")
-        CFG.update(
-            source=source, layers=layers, nodules=two, save_masked=not args.no_masked, title="Mask editor",
-            out_mask_dir=out / "masks" / _slug(layers[0]["name"]),
-            out_nodule_dir=out / "masks" / (_slug(layers[1]["name"]) if two else "layer2"),
-            out_masked_dir=out / "images" / "masked",
-        )
-        return source, "generic"
+        CFG["_nodule_csv_spec"], CFG["_nodule_cols_spec"] = args.nodule_csv or "", args.nodule_cols or ""
+        cols = tuple(c.strip() for c in args.nodule_cols.split(",")) if args.nodule_cols else None
+        try:
+            cfg = build_generic_cfg(args.images, args.masks, args.masks2, args.names, out,
+                                     parse_ids(args.ids) if args.ids else None, args.no_masked,
+                                     args.nodule_csv, cols)
+        except ValueError as e:
+            raise SystemExit(str(e))
+        CFG.update(cfg)
+        return cfg["source"], "generic"
 
     # -------- LUNA25 preset --------
     # --series is optional: without it, edit every P*-S*.npy in <dataset>/images/chest.
-    series = parse_series(args.series) if args.series else None
-    if args.series and not series:
-        raise SystemExit("no series parsed from --series")
-    source = StagingSource(args.dataset, series)
-    if not source.chest_dir.is_dir():
-        raise SystemExit(f"chest folder not found: {source.chest_dir}\n"
-                         f"point --dataset at a protocol_7 root (it must contain images/chest)")
-    CFG.update(
-        source=source, nodules=True, save_masked=not args.no_masked, title="LUNA lung-mask editor",
-        layers=[{"name": "lung", "color": RED}, {"name": "nodule", "color": GREEN}],
-        out_mask_dir=out / "masks" / "lung_parenchyma",
-        out_nodule_dir=out / "masks" / "lung_nodule",
-        out_masked_dir=out / "images" / "lung_masked",
-    )
-    return source, "LUNA (protocol_7)"
+    dataset = args.dataset or DEFAULT_DATASET
+    CFG["_dataset_spec"], CFG["_series_spec"] = dataset, args.series or ""
+    try:
+        cfg = build_luna_cfg(dataset, args.series, out, args.no_masked)
+    except ValueError as e:
+        raise SystemExit(str(e))
+    CFG.update(cfg)
+    return cfg["source"], "LUNA (protocol_7)"
 
 
 def main():
     args = build_cli().parse_args()
+    segment.configure(checkpoint=args.sam_checkpoint, repo=args.litemedsam_repo,
+                       mobilesam_checkpoint=args.mobilesam_checkpoint, mobilesam_repo=args.mobilesam_repo)
     source, label = configure(args)
 
     if args.skip_done:
@@ -166,13 +128,15 @@ def main():
         source._ids = [s for s in source._ids if not (CFG["out_mask_dir"] / f"{source.stem(s)}.npy").exists()]
         print(f"--skip-done: {before - len(source._ids)} already done, {len(source._ids)} remaining")
 
-    if not source.pids():
-        raise SystemExit("nothing to edit — check inputs" + (" (all done?)" if args.skip_done else ""))
     print(f"mode: {label}   layers: {[l['name'] for l in CFG['layers']]}")
-    print(f"editable: {len(source.pids())}"
-          + (f"  ({len(source.missing)} not found: {source.missing[:5]}…)" if source.missing else ""))
+    if not source.pids():
+        print("nothing to edit for the given inputs" + (" (all done?)" if args.skip_done else "")
+              + " — pick a folder from the splash screen once the page loads")
+    else:
+        print(f"editable: {len(source.pids())}"
+              + (f"  ({len(source.missing)} not found: {source.missing[:5]}…)" if source.missing else ""))
     print(f"edits -> {Path(args.out_dir or 'mask_edits')}\nopen http://localhost:{args.port}")
-    app.run(host="127.0.0.1", port=args.port, debug=False)
+    app.run(host="127.0.0.1", port=args.port, debug=False, threaded=True)
 
 
 if __name__ == "__main__":

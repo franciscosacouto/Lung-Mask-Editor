@@ -1,0 +1,18 @@
+# patient data — never commit
+series_528.csv
+protocol_7
+
+# your own annotation output
+mask_edits/
+demo_data/
+
+# model checkpoints — download separately, see README
+models/
+
+# third-party repos — clone separately, see README (each has its own .git)
+MedSAM/
+MobileSAM/
+
+# python
+__pycache__/
+*.pyc
