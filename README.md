@@ -32,9 +32,9 @@ Everything is plain NumPy:
 
 The `<id>` is simply the filename, and it's what your saved edits are named after.
 
-There's also a **protocol_7 / LUNA25 preset**: point it at a protocol_7-style dataset
-root (`images/chest`, `masks/lung_parenchyma`, `images/lung_nodule_crop` +
-`metadata/lung_nodule_metadata.csv`) and it reconstructs the lung + nodule layers from
+There's also a **LUNA25 dataset preset**: point it at a dataset root laid out as
+`images/chest`, `masks/lung_parenchyma`, `images/lung_nodule_crop` +
+`metadata/lung_nodule_metadata.csv`, and it reconstructs the lung + nodule layers from
 that dataset's own metadata — see `--dataset`/`--series` below.
 
 ## Run
@@ -58,11 +58,11 @@ python mask_editor.py --images imgs/ --masks lungs/ --masks2 nodules/ --names lu
 # nodule layer seeded from centroids instead of a mask folder:
 python mask_editor.py --images imgs/ --masks lungs/ --nodule-csv nodules.csv
 
-# protocol_7 / LUNA25 preset (every series in the dataset):
-python mask_editor.py --dataset protocol_7
+# LUNA25 dataset preset (every series in the dataset):
+python mask_editor.py --dataset /path/to/dataset
 
 # ...restricted to a subset of series:
-python mask_editor.py --dataset protocol_7 --series series_528.csv
+python mask_editor.py --dataset /path/to/dataset --series series.csv
 ```
 
 Then open the printed URL — **http://localhost:8000**.
@@ -77,7 +77,7 @@ folder/file browse dialog), no restart needed:
 - **Lung masks** toggle — reveals a folder picker for layer 1.
 - **Lung nodule masks** toggle — reveals a **Folder** / **Centroid CSV** dropdown, then
   the matching picker (plus an optional column-override field for the CSV).
-- **protocol_7 / LUNA25 dataset** toggle — mutually exclusive with the above; reveals a
+- **LUNA25 dataset** toggle — mutually exclusive with the above; reveals a
   Dataset folder picker and an optional Series CSV picker (blank = every series found).
 
 Whatever you pass on the command line pre-fills these fields, so you can launch with
@@ -162,6 +162,25 @@ Either way the result **replaces whatever was in that box** as a single undo ste
 (`Ctrl+Z`), so you can refine with the brush afterwards. The first prompt on an image
 runs the encoder (a few seconds on CPU); further prompts on the same image are fast.
 
+### Citing the models
+
+If you use this tool's assisted segmentation, please cite the underlying models:
+
+**MobileSAM** ([repo](https://github.com/ChaoningZhang/MobileSAM)):
+```bibtex
+@article{mobile_sam,
+  title={Faster Segment Anything: Towards Lightweight SAM for Mobile Applications},
+  author={Zhang, Chaoning and Han, Dongshen and Qiao, Yu and Kim, Jung Uk and Bae, Sung-Ho and Lee, Seungkyu and Hong, Choong Seon},
+  journal={arXiv preprint arXiv:2306.14289},
+  year={2023}
+}
+```
+
+**MedSAM** ([repo](https://github.com/bowang-lab/MedSAM)), whose LiteMedSAM branch this
+tool's nodule model comes from — Ma, J., He, Y., Li, F., Han, L., You, C., and Wang, B.,
+*"Segment Anything in Medical Images"*, Nature Communications, 2024. See the repo for
+the exact citation / BibTeX.
+
 ## Options
 
 | Option | Meaning |
@@ -174,7 +193,7 @@ runs the encoder (a few seconds on CPU); further prompts on the same image are f
 | `--nodule-csv CSV` | alternative to `--masks2`: nodule centroids (id+x+y), seeds a 32×32px square per row |
 | `--nodule-cols id,x,y` | override the sniffed CSV column names |
 | `--demo` | generate synthetic images and edit those |
-| `--dataset DIR` | protocol_7/LUNA25 preset: dataset root (or a flat `P*-S*.npy` folder). Passing this (or `--series`) switches to LUNA mode |
+| `--dataset DIR` | LUNA25 preset: dataset root (or a flat `P*-S*.npy` folder). Passing this (or `--series`) switches to LUNA mode |
 | `--series ...` | LUNA preset (optional): restrict to these series — comma list, stems, or a CSV |
 | `--out-dir DIR` | where edits are written (default `./mask_edits`) |
 | `--skip-done` | skip ids already saved in `--out-dir` (resume) |
@@ -196,7 +215,7 @@ runs the encoder (a few seconds on CPU); further prompts on the same image are f
 |---|---|
 | `mask_editor.py` | CLI and wiring — run this |
 | `server.py` | Flask routes, image ⇄ PNG helpers, native folder/file picker plumbing |
-| `sources.py` | where images and masks are read from (generic folders, centroid CSVs, protocol_7/LUNA) |
+| `sources.py` | where images and masks are read from (generic folders, centroid CSVs, LUNA25 preset) |
 | `segment.py` | optional assisted segmentation — MobileSAM (lung, point) + LiteMedSAM (nodule, box) |
 | `pick_path.py` | native OS folder/file picker, run in its own subprocess (uses `crossfiledialog`) |
 | `mask_editor.html`, `static/` | the frontend (markup, `style.css`, `app.js`) |
