@@ -13,6 +13,10 @@
  /* SAM box-prompt rubber band */
  #sambox{position:fixed;z-index:59;border:1.5px dashed #c08cff;background:rgba(192,140,255,.12);
    pointer-events:none;display:none;border-radius:2px}
+ /* image-space (x,y) readout while hovering the canvas */
+ #coords{position:fixed;top:14px;right:14px;z-index:60;font-size:12px;color:#fff;
+   background:rgba(0,0,0,.55);padding:4px 9px;border-radius:8px;pointer-events:none;
+   display:none;font-variant-numeric:tabular-nums}
  h1{font-size:22px;font-weight:700;margin:0 0 16px;letter-spacing:-.02em}
  .card{background:#1c1c1e;border-radius:16px;padding:14px;margin-bottom:12px}
  .lbl{font-size:12px;color:#8e8e93;margin:14px 0 8px;font-weight:500}

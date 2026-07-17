@@ -69,7 +69,9 @@ const rgb=a=>`rgb(${a[0]},${a[1]},${a[2]})`;
 const layerColor=()=>layer==="lung"?col0:col1;
 function sizeCursor(){const d=Math.max(6,brush*ZOOM);
   cursorEl.style.width=d+"px";cursorEl.style.height=d+"px";cursorEl.style.borderColor=rgb(layerColor());}
-function moveCursor(e){cursorEl.style.left=e.clientX+"px";cursorEl.style.top=e.clientY+"px";}
+const coordsEl=$("coords");
+function moveCursor(e){cursorEl.style.left=e.clientX+"px";cursorEl.style.top=e.clientY+"px";
+  const[x,y]=evtXY(e);coordsEl.textContent="x: "+Math.round(x)+"  y: "+Math.round(y);}
 function tintStage(){stage.style.boxShadow="0 0 0 2px "+rgb(layerColor())+",0 10px 40px rgba(0,0,0,.6)";}
 mk_events();
 function mk_events(){
@@ -95,8 +97,8 @@ function mk_events(){
      samDrag=null;return;}
    drawing=false;});
  ov.addEventListener("mousemove",moveCursor);
- ov.addEventListener("mouseenter",e=>{moveCursor(e);sizeCursor();cursorEl.style.display="block";});
- ov.addEventListener("mouseleave",()=>{cursorEl.style.display="none";});
+ ov.addEventListener("mouseenter",e=>{moveCursor(e);sizeCursor();cursorEl.style.display="block";coordsEl.style.display="block";});
+ ov.addEventListener("mouseleave",()=>{cursorEl.style.display="none";coordsEl.style.display="none";});
 }
 // SAM: apply a returned mask to the active layer (one undo step).
 // clearBox (optional [x0,y0,x1,y1]) is wiped before painting in the new mask — box prompts
