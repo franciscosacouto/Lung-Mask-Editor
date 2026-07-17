@@ -277,8 +277,27 @@ document.addEventListener("keyup",e=>{if(e.key==="h"){mk.style.opacity="1";ov.st
 // splash / landing page: red spotlight follows the mouse, dismiss on Start or Enter
 $("splash").addEventListener("mousemove",e=>{
   const s=$("splash").style; s.setProperty("--mx",e.clientX+"px"); s.setProperty("--my",e.clientY+"px");});
-function dismissSplash(){$("splash").classList.add("hidden");}
 function setSplashErr(msg){$("splashErr").textContent=msg||"";}
+// Splash <-> editor navigation goes through the History API so Chrome's own back/forward
+// arrows drive the same transition as our own "Change data source" button — plain
+// classList toggling has no history entry for the browser to go back to.
+function showEditorView(){$("splash").classList.add("hidden");}
+function showSplashView(){setSplashErr("");$("splash").classList.remove("hidden");}
+// history.state survives a page reload (it's tied to the current entry, not the script
+// run), so restore whichever view that was — only a genuinely fresh load (no state yet)
+// defaults to splash. Without this, refreshing while in the editor would always bounce
+// back to the splash screen.
+if(history.state&&history.state.view==="editor") showEditorView();
+else{history.replaceState({view:"splash"},"",location.href);showSplashView();}
+window.addEventListener("popstate",e=>{
+  if(e.state&&e.state.view==="editor") showEditorView(); else showSplashView();
+});
+function dismissSplash(){history.pushState({view:"editor"},"",location.href);showEditorView();}
+$("backBtn").onclick=async()=>{
+  if(!confirm("Go back to the data selection screen? Any unsaved changes to the current image will be saved first.")) return;
+  if(dirty) await save();
+  history.back();
+};
 function updateLungVis(){$("lungFields").style.display=$("tglLung").checked?"":"none";}
 function updateNoduleMode(){
   const csv=$("noduleMode").value==="csv";
@@ -333,6 +352,8 @@ async function startClicked(){
   if(f.lunaOn&&lunaChanged) body={dataset:f.dataset,series:f.series};
   else if(!f.lunaOn&&genericChanged&&f.images)
     body={images:f.images,masks:f.masks,masks2:f.masks2,nodule_csv:f.noduleCsv,nodule_cols:f.noduleCols};
+  // nothing new picked AND nothing already loaded -> refuse, don't silently open an empty editor
+  if(!body&&!pids.length){setSplashErr(f.lunaOn?"pick a dataset folder first":"pick an images folder first");return;}
   if(body){ // something was (re)picked -> reconfigure the backend before entering
     $("startBtn").disabled=true; setSplashErr("loading…");
     try{
@@ -340,6 +361,7 @@ async function startClicked(){
         body:JSON.stringify(body)})).json();
       if(r.error){setSplashErr(r.error);$("startBtn").disabled=false;return;}
       await initConfig();
+      if(!pids.length){setSplashErr("no images found for that selection");$("startBtn").disabled=false;return;}
     }catch(e){setSplashErr("configure request failed");$("startBtn").disabled=false;return;}
     $("startBtn").disabled=false;
   }
